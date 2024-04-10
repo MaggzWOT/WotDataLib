@@ -14,9 +14,7 @@ namespace WotDataLib
             get { return _translation; }
             set
             {
-                if (value == null)
-                    throw new ArgumentNullException();
-                _translation = value;
+                _translation = value ?? throw new ArgumentNullException();
             }
         }
         private static Translation _translation = new Translation();

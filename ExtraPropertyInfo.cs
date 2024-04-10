@@ -16,11 +16,9 @@ namespace WotDataLib
 
         public ExtraPropertyInfo(ExtraPropertyId id, IDictionary<string, string> descriptions)
         {
-            if (id == null)
-                throw new ArgumentNullException();
             if (descriptions == null)
                 throw new ArgumentNullException();
-            PropertyId = id;
+            PropertyId = id ?? throw new ArgumentNullException();
             Descriptions = descriptions.AsReadOnly();
         }
     }

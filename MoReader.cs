@@ -12,10 +12,10 @@ namespace WotDataLib
         public static IDictionary<string, string> ReadFile(string filename)
         {
             using (var reader = new BinaryReader(File.Open(filename, FileMode.Open, FileAccess.Read, FileShare.Read)))
-                return readFile(reader);
+                return ReadFile(reader);
         }
 
-        private static IDictionary<string, string> readFile(BinaryReader reader)
+        private static IDictionary<string, string> ReadFile(BinaryReader reader)
         {
             if (reader.ReadUInt32() != 0x950412DE)
                 throw new WotDataException("This file does not look like a valid .mo file");
@@ -28,14 +28,14 @@ namespace WotDataLib
             var result = new Dictionary<string, string>();
             for (int i = 0; i < entries; i++)
             {
-                var key = readString(reader, 28 + 8 * i);
-                var value = readString(reader, 28 + 8 * (i + entries));
+                var key = ReadString(reader, 28 + 8 * i);
+                var value = ReadString(reader, 28 + 8 * (i + entries));
                 result[key] = value;
             }
             return result;
         }
 
-        private static string readString(BinaryReader reader, int offset)
+        private static string ReadString(BinaryReader reader, int offset)
         {
             reader.BaseStream.Position = offset;
             int count = reader.ReadInt32();

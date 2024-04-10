@@ -20,8 +20,8 @@ namespace WotDataLib
         {
             using (var reader = new BinaryReader(File.Open(filename, FileMode.Open, FileAccess.Read, FileShare.Read)))
             {
-                var result = readFile(reader);
-                // debug: File.WriteAllText("C:/Temp/WoT/" + filename.FilenameCharactersEscape(), result.ToStringIndented());
+                var result = ReadFile(reader);
+                // File.WriteAllText("C:/temp/WoT/" + filename + ".txt", result.ToStringIndented());
                 return result;
             }
         }
@@ -31,18 +31,23 @@ namespace WotDataLib
         /// <remarks>
         ///     The WoT data files do not have a consistent type for all the numbers. Expect to see raw numbers (like
         ///     <c>5.7</c>) mixed freely with string numbers (like <c>"5.7"</c>).</remarks>
-        public static JsonDict ReadFile(Stream file)
+        public static JsonDict ReadFile(Stream file, string country)
         {
+            if (country is null)
+            {
+                throw new ArgumentNullException(nameof(country));
+            }
+
             using (var reader = new BinaryReader(file))
             {
-                var result = readFile(reader);
-                // debug: File.WriteAllText("C:/Temp/WoT/" + filename.FilenameCharactersEscape(), result.ToStringIndented());
+                var result = ReadFile(reader);
+                //File.WriteAllText("C:/temp/WoT/" + file + country + ".txt", result.ToStringIndented());
                 return result;
             }
         }
 
         /// <summary>Reads a BXML file from the specified binary reader, returning the result as a JSON structure.</summary>
-        private static JsonDict readFile(BinaryReader reader)
+        private static JsonDict ReadFile(BinaryReader reader)
         {
             // Read and check file header
             if (reader.ReadUInt32() != 0x62A14E45)
@@ -75,10 +80,10 @@ namespace WotDataLib
             }
 
             // Read a single dictionary structure
-            return readDict(reader, strings);
+            return ReadDict(reader, strings);
         }
 
-        private enum type { Dict = 0, String = 1, Int = 2, Floats = 3, Bool = 4, Base64 = 5 }
+        private enum Type { Dict = 0, String = 1, Int = 2, Floats = 3, Bool = 4, Base64 = 5 }
 
         /// <summary>
         ///     Reads a value of type dictionary from the current position of the binary reader. Note that in addition to a
@@ -90,7 +95,7 @@ namespace WotDataLib
         ///     An array of strings read from the start of the file, used as dictionary keys.</param>
         /// <returns>
         ///     The dictionary read, converted to a JSON dictionary for convenience.</returns>
-        private static JsonDict readDict(BinaryReader reader, List<string> strings)
+        private static JsonDict ReadDict(BinaryReader reader, List<string> strings)
         {
             // Read the number of children that this dictionary has
             int childCount = reader.ReadInt16();
@@ -98,14 +103,14 @@ namespace WotDataLib
             // Read the length and data type of the "own" value.
             int endAndType = reader.ReadInt32();
             var ownValueLength = endAndType & 0x0fffffff;
-            var ownValueType = (type) (endAndType >> 28);
-            if (ownValueType == type.Dict)
+            var ownValueType = (Type) (endAndType >> 28);
+            if (ownValueType == Type.Dict)
                 throw new WotDataException("14516");
 
             int prevEnd = ownValueLength;
 
             // Read information about each of the child values: the key name, the length and type of the value
-            var children = new[] { new { name = "dummy", length = 0, type = type.String } }.ToList();
+            var children = new[] { new { name = "dummy", length = 0, type = Type.String } }.ToList();
             children.Clear();
             for (int dummy = 0; dummy < childCount; dummy++)
             {
@@ -114,17 +119,17 @@ namespace WotDataLib
                 var end = endAndType & 0x0fffffff;
                 var length = end - prevEnd;
                 prevEnd = end;
-                children.Add(new { name, length, type = (type) (endAndType >> 28) });
+                children.Add(new { name, length, type = (Type) (endAndType >> 28) });
             }
 
             // Read the own value
             var result = new JsonDict();
-            if (ownValueLength > 0 || ownValueType != type.String) // some dictionaries don't have an "own" value
-                result[""] = readData(reader, strings, ownValueType, ownValueLength);
+            if (ownValueLength > 0 || ownValueType != Type.String) // some dictionaries don't have an "own" value
+                result[""] = ReadData(reader, strings, ownValueType, ownValueLength);
 
             // Read the child values
             foreach (var child in children)
-                result[child.name] = readData(reader, strings, child.type, child.length);
+                result[child.name] = ReadData(reader, strings, child.type, child.length);
 
             return result;
         }
@@ -142,15 +147,15 @@ namespace WotDataLib
         ///     The length of the value (which must have been read elsewhere in the binary data file).</param>
         /// <returns>
         ///     The value read, converted for convenience to a JSON value.</returns>
-        private static JsonValue readData(BinaryReader reader, List<string> strings, type type, int length)
+        private static JsonValue ReadData(BinaryReader reader, List<string> strings, Type type, int length)
         {
             switch (type)
             {
-                case type.Dict:
-                    return readDict(reader, strings);
-                case type.String:
+                case Type.Dict:
+                    return ReadDict(reader, strings);
+                case Type.String:
                     return new JsonString(Encoding.UTF8.GetString(reader.ReadBytes(length), 0, length));
-                case type.Int:
+                case Type.Int:
                     switch (length)
                     {
                         case 0:
@@ -164,7 +169,7 @@ namespace WotDataLib
                         default:
                             throw new WotDataException("Unexpected length for Int");
                     }
-                case type.Floats:
+                case Type.Floats:
                     var floats = new List<JsonNumber>();
                     for (int i = 0; i < length / 4; i++)
                         floats.Add(reader.ReadSingle());
@@ -172,12 +177,12 @@ namespace WotDataLib
                         return floats[0];
                     else
                         return new JsonList(floats);
-                case type.Bool:
+                case Type.Bool:
                     bool value = length == 1;
                     if (value && reader.ReadSByte() != 1)
                         throw new WotDataException("Boolean error");
                     return new JsonBool(value);
-                case type.Base64:
+                case Type.Base64:
                     var b64 = Convert.ToBase64String(reader.ReadBytes(length)); // weird one: bytes -> base64 where the base64 looks like a normal string
                     return new JsonString(b64);
                 default:

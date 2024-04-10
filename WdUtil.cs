@@ -28,14 +28,14 @@ namespace WotDataLib
                 var lineTrim = line.Trim();
                 if (lineTrim == "" || lineTrim.StartsWith("#"))
                     continue;
-                var fields = parseCsvLine(line);
+                var fields = ParseCsvLine(line);
                 if (fields == null)
                     throw new WotDataUserError(WdUtil.Tr.Error.DataFile_CsvParse.Fmt(num));
                 yield return Tuple.Create(num, fields);
             }
         }
 
-        private static string[] parseCsvLine(string line)
+        private static string[] ParseCsvLine(string line)
         {
             var fields = Regex.Matches(line, @"(^|(?<=,)) *(?<quote>""?)(("""")?[^""]*?)*?\k<quote> *($|(?=,))").Cast<Match>().Select(m => m.Value).ToArray();
             if (line != string.Join(",", fields))

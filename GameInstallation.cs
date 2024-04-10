@@ -13,7 +13,7 @@ namespace WotDataLib
     {
         /// <summary>Absolute path to the root of this game installation.</summary>
         public string Path { get { return _path; } }
-        private string _path;
+        private readonly string _path;
 
         /// <summary>
         ///     A machine-comparable game version identifier, aka "build ID". Null if the path does not exist or does not

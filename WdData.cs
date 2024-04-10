@@ -44,7 +44,7 @@ namespace WotDataLib
                 {
                     using (var stream = WotFileExporter.GetFileStream(path))
                     {
-                        tanks = BxmlReader.ReadFile(stream);
+                        tanks = BxmlReader.ReadFile(stream, country);
                     }
                 }
                 catch (Exception e) { throw new WotDataException("Couldn't read vehicle list for country \"{0}\" from file \"{1}\"".Fmt(country, path), e); }
@@ -54,7 +54,7 @@ namespace WotDataLib
                 {
                     using (var stream = WotFileExporter.GetFileStream(path))
                     {
-                        engines = BxmlReader.ReadFile(stream);
+                        engines = BxmlReader.ReadFile(stream, country);
                     }
                 }
                 catch (Exception e) { throw new WotDataException("Couldn't read engines data for country \"{0}\" from file \"{1}\"".Fmt(country, path), e); }
@@ -64,7 +64,7 @@ namespace WotDataLib
                 {
                     using (var stream = WotFileExporter.GetFileStream(path))
                     {
-                        guns = BxmlReader.ReadFile(stream);
+                        guns = BxmlReader.ReadFile(stream, country);
                     }
                 }
                 catch (Exception e) { throw new WotDataException("Couldn't read guns data for country \"{0}\" from file \"{1}\"".Fmt(country, path), e); }
@@ -74,7 +74,7 @@ namespace WotDataLib
                 {
                     using (var stream = WotFileExporter.GetFileStream(path))
                     {
-                        radios = BxmlReader.ReadFile(stream);
+                        radios = BxmlReader.ReadFile(stream, country);
                     }
                 }
                 catch (Exception e) { throw new WotDataException("Couldn't read radios data for country \"{0}\" from file \"{1}\"".Fmt(country, path), e); }
@@ -84,7 +84,7 @@ namespace WotDataLib
                 {
                     using (var stream = WotFileExporter.GetFileStream(path))
                     {
-                        shells = BxmlReader.ReadFile(stream);
+                        shells = BxmlReader.ReadFile(stream, country);
                     }
                 }
                 catch (Exception e) { throw new WotDataException("Couldn't read shells data for country \"{0}\" from file \"{1}\"".Fmt(country, path), e); }
@@ -149,7 +149,7 @@ namespace WotDataLib
             _moFiles = null;
         }
 
-        private Dictionary<string, IDictionary<string, string>> _moFiles = new Dictionary<string, IDictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, IDictionary<string, string>> _moFiles = new Dictionary<string, IDictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
 
         internal string ResolveString(string stringRef)
         {
@@ -296,8 +296,8 @@ namespace WotDataLib
             var tags1 = Raw["tags"].WdString().Split("\r\n").Select(s => s.Trim()).ToHashSet();
             var tags2 = Raw["tags"].WdString().Split(' ').Select(s => s.Trim()).ToHashSet();
             Tags = tags1.Count > tags2.Count ? tags1 : tags2;
-            Special = Tags.Contains("special") ? true : false;
-            Collector = Tags.Contains("collectorVehicle") ? true : false;
+            Special = Tags.Contains("special");
+            Collector = Tags.Contains("collectorVehicle");
             Price = Raw["price"] is JsonDict ? Raw["price"][""].WdInt() : Raw["price"].WdInt();
             Gold = Raw["price"] is JsonDict && Raw["price"].ContainsKey("gold");
 
@@ -322,7 +322,7 @@ namespace WotDataLib
                 @"item_defs\vehicles\{0}\{1}.xml".Fmt(Country.Name, id));
             using (var stream = WotFileExporter.GetFileStream(path))
             {
-                RawExtra = BxmlReader.ReadFile(stream);
+                RawExtra = BxmlReader.ReadFile(stream, Country.Name);
             }
 
             FullName = data.ResolveString(Raw["userString"].WdString());

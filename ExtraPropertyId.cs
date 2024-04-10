@@ -56,9 +56,9 @@ namespace WotDataLib
 
         public static bool operator == (ExtraPropertyId a, ExtraPropertyId b)
         {
-            if ((object) a == null && (object) b == null)
+            if (a is null && b is null)
                 return true;
-            else if ((object) a == null || (object) b == null)
+            else if (a is null || b is null)
                 return false;
             else
                 return a.Equals(b);

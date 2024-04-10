@@ -28,7 +28,7 @@ namespace WotDataLib
         ///     values come directly from the game client data.</summary>
         public WdTank ClientData { get; internal set; }
 
-        private Dictionary<ExtraPropertyId, string> _extras;
+        private readonly Dictionary<ExtraPropertyId, string> _extras;
 
         private WotTank() { }
 
@@ -69,8 +69,7 @@ namespace WotDataLib
                     return Tier == 0 ? "" : Tier.ToString();
                 else if (property == ExtraPropertyId.TierRoman)
                     return WdUtil.RomanNumerals[Tier].ToString();
-                string result;
-                if (!_extras.TryGetValue(property, out result))
+                if (!_extras.TryGetValue(property, out string result))
                     return null;
                 return result;
             }

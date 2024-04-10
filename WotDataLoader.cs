@@ -21,29 +21,29 @@ namespace WotDataLib
             if (!Directory.Exists(dataPath))
                 return null; // because there are no game version configs available
 
-            var versionConfigs = loadGameVersionConfig(dataPath, warnings);
+            var versionConfigs = LoadGameVersionConfig(dataPath, warnings);
             var versionConfig = versionConfigs.Where(v => v.GameVersionId <= installation.GameVersionId.Value).MaxElementOrDefault(v => v.GameVersionId);
             // versionConfig may be null here
 
             var wd = new WdData(installation, versionConfig);
             warnings.AddRange(wd.Warnings);
 
-            var clientData = loadFromClient(wd, installation, warnings);
+            var clientData = LoadFromClient(wd, installation, warnings);
             if (exportPath != null)
-                exportClientData(clientData, exportPath);
-            var builtin = loadBuiltInFiles(dataPath, warnings, clientData.Item1);
-            var extras = loadDataExtraFiles(dataPath, warnings, clientData.Item2);
+                ExportClientData(clientData, exportPath);
+            var builtin = LoadBuiltInFiles(dataPath, warnings, clientData.Item1);
+            var extras = LoadDataExtraFiles(dataPath, warnings, clientData.Item2);
 
             if (!builtin.Any() || !versionConfigs.Any())
                 warnings.Add(WdUtil.Tr.Error.DataDir_NoFilesAvailable);
 
-            var result = resolve(installation, versionConfig, builtin, extras, warnings, defaultAuthor);
+            var result = Resolve(installation, versionConfig, builtin, extras, warnings, defaultAuthor);
             foreach (var tank in result.Tanks)
                 tank.ClientData = wd.Tanks.FirstOrDefault(cd => cd.Id == tank.TankId);
             return result;
         }
 
-        private static List<GameVersionConfig> loadGameVersionConfig(string dataPath, List<string> warnings)
+        private static List<GameVersionConfig> LoadGameVersionConfig(string dataPath, List<string> warnings)
         {
             var result = new List<GameVersionConfig>();
             foreach (var fi in new DirectoryInfo(dataPath).GetFiles("WotGameVersion-*.xml"))
@@ -56,8 +56,7 @@ namespace WotDataLib
                     continue;
                 }
 
-                int gameVersionId;
-                if (!parts[1].StartsWith("#") || !int.TryParse(parts[1].Substring(1), out gameVersionId))
+                if (!parts[1].StartsWith("#") || !int.TryParse(parts[1].Substring(1), out int gameVersionId))
                 {
                     warnings.Add(WdUtil.Tr.Error.DataDir_Skip_GameVersion.Fmt(fi.Name, parts[1]));
                     continue;
@@ -78,12 +77,14 @@ namespace WotDataLib
             return result;
         }
 
-        private static Tuple<unresolvedBuiltIn, List<unresolvedExtraFileCol>> loadFromClient(WdData wd, GameInstallation installation, List<string> warnings)
+        private static Tuple<UnresolvedBuiltIn, List<UnresolvedExtraFileCol>> LoadFromClient(WdData wd, GameInstallation installation, List<string> warnings)
         {
             // Built-in
-            var builtin = new unresolvedBuiltIn();
-            builtin.FileVersion = 0;
-            builtin.Entries = new List<TankEntry>();
+            var builtin = new UnresolvedBuiltIn
+            {
+                FileVersion = 0,
+                Entries = new List<TankEntry>()
+            };
             foreach (var tank in wd.Tanks)
             {
                 Country country;
@@ -127,65 +128,75 @@ namespace WotDataLib
 
 
             // NameFull / Wargaming
-            var nameFull = new unresolvedExtraFileCol();
-            nameFull.PropertyId = new ExtraPropertyId("NameFull", null, "Wargaming");
-            nameFull.FileVersion = 0;
-            nameFull.Descriptions = new Dictionary<string, string>
+            var nameFull = new UnresolvedExtraFileCol
+            {
+                PropertyId = new ExtraPropertyId("NameFull", null, "Wargaming"),
+                FileVersion = 0,
+                Descriptions = new Dictionary<string, string>
             {
                 { "Ru", "Полные названия танков, оригинал – как в игре." },
                 { "En", "Full tank names, original – like in the game." },
+            },
+                Entries = wd.Tanks.Select(tank => new ExtraEntry(tank.Id, tank.FullName, installation.GameVersionId)).ToList()
             };
-            nameFull.Entries = wd.Tanks.Select(tank => new ExtraEntry(tank.Id, tank.FullName, installation.GameVersionId)).ToList();
 
 
             // NameShort / Wargaming
-            var nameShort = new unresolvedExtraFileCol();
-            nameShort.PropertyId = new ExtraPropertyId("NameShort", null, "Wargaming");
-            nameShort.FileVersion = 0;
-            nameShort.Descriptions = new Dictionary<string, string>
+            var nameShort = new UnresolvedExtraFileCol
+            {
+                PropertyId = new ExtraPropertyId("NameShort", null, "Wargaming"),
+                FileVersion = 0,
+                Descriptions = new Dictionary<string, string>
             {
                 { "Ru", "Короткие названия танков, оригинал – как в игре." },
                 { "En", "Short tank names, original – like in the game." },
+            },
+                Entries = wd.Tanks.Select(tank => new ExtraEntry(tank.Id, tank.ShortName, installation.GameVersionId)).ToList()
             };
-            nameShort.Entries = wd.Tanks.Select(tank => new ExtraEntry(tank.Id, tank.ShortName, installation.GameVersionId)).ToList();
 
 
             // Speed: forward
-            var speedForward = new unresolvedExtraFileCol();
-            speedForward.PropertyId = new ExtraPropertyId("Speed", "Forward", "Wargaming");
-            speedForward.FileVersion = 0;
-            speedForward.Descriptions = new Dictionary<string, string>
+            var speedForward = new UnresolvedExtraFileCol
+            {
+                PropertyId = new ExtraPropertyId("Speed", "Forward", "Wargaming"),
+                FileVersion = 0,
+                Descriptions = new Dictionary<string, string>
             {
                 { "Ru", "Максимальная скорость вперед." },
                 { "En", "Maximum forward speed." },
+            },
+                Entries = wd.Tanks.Select(tank =>
+                    new ExtraEntry(tank.Id, tank.MaxSpeedForward.ToString(), installation.GameVersionId)
+            ).ToList()
             };
-            speedForward.Entries = wd.Tanks.Select(tank =>
-                new ExtraEntry(tank.Id, tank.MaxSpeedForward.ToString(), installation.GameVersionId)
-            ).ToList();
 
 
             // Speed: reverse
-            var speedReverse = new unresolvedExtraFileCol();
-            speedReverse.PropertyId = new ExtraPropertyId("Speed", "Reverse", "Wargaming");
-            speedReverse.FileVersion = 0;
-            speedReverse.Descriptions = new Dictionary<string, string>
+            var speedReverse = new UnresolvedExtraFileCol
+            {
+                PropertyId = new ExtraPropertyId("Speed", "Reverse", "Wargaming"),
+                FileVersion = 0,
+                Descriptions = new Dictionary<string, string>
             {
                 { "Ru", "Максимальная скорость назад." },
                 { "En", "Maximum reverse speed." },
+            },
+                Entries = wd.Tanks.Select(tank =>
+                    new ExtraEntry(tank.Id, tank.MaxSpeedReverse.ToString(), installation.GameVersionId)
+            ).ToList()
             };
-            speedReverse.Entries = wd.Tanks.Select(tank =>
-                new ExtraEntry(tank.Id, tank.MaxSpeedReverse.ToString(), installation.GameVersionId)
-            ).ToList();
 
 
             // Armor: hull
-            var armorHull = new unresolvedExtraFileCol();
-            armorHull.PropertyId = new ExtraPropertyId("Armor", "Hull", "Wargaming");
-            armorHull.FileVersion = 0;
-            armorHull.Descriptions = new Dictionary<string, string>
+            var armorHull = new UnresolvedExtraFileCol
+            {
+                PropertyId = new ExtraPropertyId("Armor", "Hull", "Wargaming"),
+                FileVersion = 0,
+                Descriptions = new Dictionary<string, string>
             {
                 { "Ru", "Бронирование корпуса (перед, бока, зад)." },
                 { "En", "Hull armor thickness (front, sides, rear)." },
+            }
             };
             var armorStr = Ut.Lambda((decimal? main, decimal? align) =>
             {
@@ -205,173 +216,195 @@ namespace WotDataLib
 
 
             // Armor: top turret
-            var armorTurret = new unresolvedExtraFileCol();
-            armorTurret.PropertyId = new ExtraPropertyId("Armor", "Turret", "Wargaming");
-            armorTurret.FileVersion = 0;
-            armorTurret.Descriptions = new Dictionary<string, string>
+            var armorTurret = new UnresolvedExtraFileCol
+            {
+                PropertyId = new ExtraPropertyId("Armor", "Turret", "Wargaming"),
+                FileVersion = 0,
+                Descriptions = new Dictionary<string, string>
             {
                 { "Ru", "Бронирование топ башни (перед, бока, зад)." },
                 { "En", "Top turret armor thickness (front, sides, rear)." },
+            },
+                Entries = wd.Tanks.Where(t => t.TopTurret.Rotates).Select(tank =>
+                    new ExtraEntry(tank.Id,
+                        armorStr(tank.TopTurret.NullOr(t => t.ArmorThicknessFront), tank.Hull.ArmorThicknessFront) + " " +
+                        armorStr(tank.TopTurret.NullOr(t => t.ArmorThicknessSide), tank.Hull.ArmorThicknessSide) + " " +
+                        armorStr(tank.TopTurret.NullOr(t => t.ArmorThicknessBack), tank.Hull.ArmorThicknessBack),
+                        installation.GameVersionId)
+            ).ToList()
             };
-            armorTurret.Entries = wd.Tanks.Where(t => t.TopTurret.Rotates).Select(tank =>
-                new ExtraEntry(tank.Id,
-                    armorStr(tank.TopTurret.NullOr(t => t.ArmorThicknessFront), tank.Hull.ArmorThicknessFront) + " " +
-                    armorStr(tank.TopTurret.NullOr(t => t.ArmorThicknessSide), tank.Hull.ArmorThicknessSide) + " " +
-                    armorStr(tank.TopTurret.NullOr(t => t.ArmorThicknessBack), tank.Hull.ArmorThicknessBack),
-                    installation.GameVersionId)
-            ).ToList();
             armorTurret.Entries.RemoveAll(e => e.Value.Trim().Replace(" ", "") == "000");
 
 
             // Visibility: top turret
-            var visibility = new unresolvedExtraFileCol();
-            visibility.PropertyId = new ExtraPropertyId("Visibility", "TopTurretBase", "Wargaming");
-            visibility.FileVersion = 0;
-            visibility.Descriptions = new Dictionary<string, string>
+            var visibility = new UnresolvedExtraFileCol
+            {
+                PropertyId = new ExtraPropertyId("Visibility", "TopTurretBase", "Wargaming"),
+                FileVersion = 0,
+                Descriptions = new Dictionary<string, string>
             {
                 { "Ru", "Базовый обзор из топ башни." },
                 { "En", "Base visibility with top turret." },
+            },
+                Entries = wd.Tanks.Select(tank =>
+                    new ExtraEntry(tank.Id, Math.Round(tank.TopTurret.VisionDistance).ToString(), installation.GameVersionId)
+            ).ToList()
             };
-            visibility.Entries = wd.Tanks.Select(tank =>
-                new ExtraEntry(tank.Id, Math.Round(tank.TopTurret.VisionDistance).ToString(), installation.GameVersionId)
-            ).ToList();
 
 
             // Total hit points
-            var hitPointsTotal = new unresolvedExtraFileCol();
-            hitPointsTotal.PropertyId = new ExtraPropertyId("HitPoints", "Tank", "Wargaming");
-            hitPointsTotal.FileVersion = 0;
-            hitPointsTotal.Descriptions = new Dictionary<string, string>
+            var hitPointsTotal = new UnresolvedExtraFileCol
+            {
+                PropertyId = new ExtraPropertyId("HitPoints", "Tank", "Wargaming"),
+                FileVersion = 0,
+                Descriptions = new Dictionary<string, string>
             {
                 { "Ru", "Прочность танка с топ башней." },
                 { "En", "Tank hit points with the top turret." },
+            },
+                Entries = wd.Tanks.Select(tank =>
+                    new ExtraEntry(tank.Id, (tank.Hull.HitPoints + tank.TopTurret.HitPoints).ToString(), installation.GameVersionId)
+            ).ToList()
             };
-            hitPointsTotal.Entries = wd.Tanks.Select(tank =>
-                new ExtraEntry(tank.Id, (tank.Hull.HitPoints + tank.TopTurret.HitPoints).ToString(), installation.GameVersionId)
-            ).ToList();
 
 
             // Has turret
-            var hasTurret = new unresolvedExtraFileCol();
-            hasTurret.PropertyId = new ExtraPropertyId("HasTurret", null, "Wargaming");
-            hasTurret.FileVersion = 0;
-            hasTurret.Descriptions = new Dictionary<string, string>
+            var hasTurret = new UnresolvedExtraFileCol
+            {
+                PropertyId = new ExtraPropertyId("HasTurret", null, "Wargaming"),
+                FileVersion = 0,
+                Descriptions = new Dictionary<string, string>
             {
                 { "Ru", "Содержит \"*\" для танков, имеющих вращающуюся башню." },
                 { "En", "Contains \"*\" for every tank which has a rotating turret." },
+            },
+                Entries = wd.Tanks.Where(t => t.TopTurret.Rotates).Select(tank =>
+                    new ExtraEntry(tank.Id, "*", installation.GameVersionId)
+            ).ToList()
             };
-            hasTurret.Entries = wd.Tanks.Where(t => t.TopTurret.Rotates).Select(tank =>
-                new ExtraEntry(tank.Id, "*", installation.GameVersionId)
-            ).ToList();
 
 
             // Has drum
-            var hasDrumAnyGun = new unresolvedExtraFileCol();
-            hasDrumAnyGun.PropertyId = new ExtraPropertyId("HasDrum", "AnyGun", "Wargaming");
-            hasDrumAnyGun.FileVersion = 0;
-            hasDrumAnyGun.Descriptions = new Dictionary<string, string>
+            var hasDrumAnyGun = new UnresolvedExtraFileCol
+            {
+                PropertyId = new ExtraPropertyId("HasDrum", "AnyGun", "Wargaming"),
+                FileVersion = 0,
+                Descriptions = new Dictionary<string, string>
             {
                 { "Ru", "Содержит \"*\" для танков, имеющих доступ к пушке с барабаном." },
                 { "En", "Contains \"*\" for tanks which have access to a gun with a drum." },
+            },
+                Entries = wd.Tanks.Where(t => t.Turrets.Any(r => r.Guns.Any(g => g.HasDrum))).Select(tank =>
+                    new ExtraEntry(tank.Id, "*", installation.GameVersionId)
+            ).ToList()
             };
-            hasDrumAnyGun.Entries = wd.Tanks.Where(t => t.Turrets.Any(r => r.Guns.Any(g => g.HasDrum))).Select(tank =>
-                new ExtraEntry(tank.Id, "*", installation.GameVersionId)
-            ).ToList();
 
 
             // Has drum
-            var hasDrumTopGun = new unresolvedExtraFileCol();
-            hasDrumTopGun.PropertyId = new ExtraPropertyId("HasDrum", "TopGun", "Wargaming");
-            hasDrumTopGun.FileVersion = 0;
-            hasDrumTopGun.Descriptions = new Dictionary<string, string>
+            var hasDrumTopGun = new UnresolvedExtraFileCol
+            {
+                PropertyId = new ExtraPropertyId("HasDrum", "TopGun", "Wargaming"),
+                FileVersion = 0,
+                Descriptions = new Dictionary<string, string>
             {
                 { "Ru", "Содержит \"*\" для танков, чья топовая пушка имеет барабан." },
                 { "En", "Contains \"*\" for tanks whose top gun has a drum." },
+            },
+                Entries = wd.Tanks.Where(t => t.TopGun.HasDrum).Select(tank =>
+                    new ExtraEntry(tank.Id, "*", installation.GameVersionId)
+            ).ToList()
             };
-            hasDrumTopGun.Entries = wd.Tanks.Where(t => t.TopGun.HasDrum).Select(tank =>
-                new ExtraEntry(tank.Id, "*", installation.GameVersionId)
-            ).ToList();
 
 
             // Has wheels
-            var hasWheels = new unresolvedExtraFileCol();
-            hasWheels.PropertyId = new ExtraPropertyId("HasWheels", null, "Wargaming");
-            hasWheels.FileVersion = 0;
-            hasWheels.Descriptions = new Dictionary<string, string>
+            var hasWheels = new UnresolvedExtraFileCol
+            {
+                PropertyId = new ExtraPropertyId("HasWheels", null, "Wargaming"),
+                FileVersion = 0,
+                Descriptions = new Dictionary<string, string>
             {
                 { "Ru", "Содержит \"*\" для колесной техники, пусто для остальной техники." },
                 { "En", "Contains \"*\" for wheeled vehicles, empty for the rest of the vehicle" },
+            },
+                Entries = wd.Tanks.Where(t => t.Chassis.Any(c => c.HasWheels)).Select(tank =>
+                    new ExtraEntry(tank.Id, "*", installation.GameVersionId)
+            ).ToList()
             };
-            hasWheels.Entries = wd.Tanks.Where(t => t.Chassis.Any(c => c.HasWheels)).Select(tank =>
-                new ExtraEntry(tank.Id, "*", installation.GameVersionId)
-            ).ToList();
 
 
             // Maximum penetration
-            var gunsMaxPenetration = new unresolvedExtraFileCol();
-            gunsMaxPenetration.PropertyId = new ExtraPropertyId("Guns", "MaxPenetration", "Wargaming");
-            gunsMaxPenetration.FileVersion = 0;
-            gunsMaxPenetration.Descriptions = new Dictionary<string, string>
+            var gunsMaxPenetration = new UnresolvedExtraFileCol
+            {
+                PropertyId = new ExtraPropertyId("Guns", "MaxPenetration", "Wargaming"),
+                FileVersion = 0,
+                Descriptions = new Dictionary<string, string>
             {
                 { "Ru", "Пробитие лучшей пушкой/снарядом (кроме голды)." },
                 { "En", "Penetration using the best gun/shell (except premium shells)." },
+            },
+                Entries = wd.Tanks.Select(tank =>
+                    new ExtraEntry(tank.Id, (tank.Turrets.SelectMany(t => t.Guns).SelectMany(g => g.Shells).Where(s => !s.Gold).Max(s => s.PenetrationArmor)).ToString(),
+                        installation.GameVersionId)
+            ).ToList()
             };
-            gunsMaxPenetration.Entries = wd.Tanks.Select(tank =>
-                new ExtraEntry(tank.Id, (tank.Turrets.SelectMany(t => t.Guns).SelectMany(g => g.Shells).Where(s => !s.Gold).Max(s => s.PenetrationArmor)).ToString(),
-                    installation.GameVersionId)
-            ).ToList();
 
 
             // Maximum damage
-            var gunsMaxDamage = new unresolvedExtraFileCol();
-            gunsMaxDamage.PropertyId = new ExtraPropertyId("Guns", "MaxDamage", "Wargaming");
-            gunsMaxDamage.FileVersion = 0;
-            gunsMaxDamage.Descriptions = new Dictionary<string, string>
+            var gunsMaxDamage = new UnresolvedExtraFileCol
+            {
+                PropertyId = new ExtraPropertyId("Guns", "MaxDamage", "Wargaming"),
+                FileVersion = 0,
+                Descriptions = new Dictionary<string, string>
             {
                 { "Ru", "Урон лучшей пушкой/снарядом (кроме голды)." },
                 { "En", "Damage using the best gun/shell (except premium shells)." },
+            },
+                Entries = wd.Tanks.Select(tank =>
+                    new ExtraEntry(tank.Id, (tank.Turrets.SelectMany(t => t.Guns).SelectMany(g => g.Shells).Where(s => !s.Gold).Max(s => s.DamageArmor)).ToString(),
+                        installation.GameVersionId)
+            ).ToList()
             };
-            gunsMaxDamage.Entries = wd.Tanks.Select(tank =>
-                new ExtraEntry(tank.Id, (tank.Turrets.SelectMany(t => t.Guns).SelectMany(g => g.Shells).Where(s => !s.Gold).Max(s => s.DamageArmor)).ToString(),
-                    installation.GameVersionId)
-            ).ToList();
 
 
             // Damage using the most penetrating shell
-            var gunsMaxPenetrationDamage = new unresolvedExtraFileCol();
-            gunsMaxPenetrationDamage.PropertyId = new ExtraPropertyId("Guns", "MaxPenetrationDamage", "Wargaming");
-            gunsMaxPenetrationDamage.FileVersion = 0;
-            gunsMaxPenetrationDamage.Descriptions = new Dictionary<string, string>
+            var gunsMaxPenetrationDamage = new UnresolvedExtraFileCol
+            {
+                PropertyId = new ExtraPropertyId("Guns", "MaxPenetrationDamage", "Wargaming"),
+                FileVersion = 0,
+                Descriptions = new Dictionary<string, string>
             {
                 { "Ru", "Урон пушкой/снарядом с лучшим пробитием (кроме голды)." },
                 { "En", "Damage using the most penetrating gun/shell (except premium shells)." },
+            },
+                Entries = wd.Tanks.Select(tank =>
+                    new ExtraEntry(tank.Id, (tank.Turrets.SelectMany(t => t.Guns).SelectMany(g => g.Shells).Where(s => !s.Gold).MaxElement(s => s.PenetrationArmor).DamageArmor).ToString(),
+                        installation.GameVersionId)
+            ).ToList()
             };
-            gunsMaxPenetrationDamage.Entries = wd.Tanks.Select(tank =>
-                new ExtraEntry(tank.Id, (tank.Turrets.SelectMany(t => t.Guns).SelectMany(g => g.Shells).Where(s => !s.Gold).MaxElement(s => s.PenetrationArmor).DamageArmor).ToString(),
-                    installation.GameVersionId)
-            ).ToList();
 
 
             // Top gun reload time
-            var gunsTopGunReloadTime = new unresolvedExtraFileCol();
-            gunsTopGunReloadTime.PropertyId = new ExtraPropertyId("Guns", "TopGunReloadTime", "Wargaming");
-            gunsTopGunReloadTime.FileVersion = 0;
-            gunsTopGunReloadTime.Descriptions = new Dictionary<string, string>
+            var gunsTopGunReloadTime = new UnresolvedExtraFileCol
+            {
+                PropertyId = new ExtraPropertyId("Guns", "TopGunReloadTime", "Wargaming"),
+                FileVersion = 0,
+                Descriptions = new Dictionary<string, string>
             {
                 { "Ru", "Время перезарядки топового орудия." },
                 { "En", "Top gun reload time." },
+            },
+                Entries = wd.Tanks.Select(tank =>
+                    new ExtraEntry(tank.Id, tank.TopGun.ReloadTime.ToString(),
+                        installation.GameVersionId)
+            ).ToList()
             };
-            gunsTopGunReloadTime.Entries = wd.Tanks.Select(tank =>
-                new ExtraEntry(tank.Id, tank.TopGun.ReloadTime.ToString(),
-                    installation.GameVersionId)
-            ).ToList();
 
 
-            return Tuple.Create(builtin, new List<unresolvedExtraFileCol> { nameFull, nameShort, speedForward, speedReverse, armorHull, armorTurret,
+            return Tuple.Create(builtin, new List<UnresolvedExtraFileCol> { nameFull, nameShort, speedForward, speedReverse, armorHull, armorTurret,
                 visibility, hitPointsTotal, hasTurret, hasDrumAnyGun, hasDrumTopGun, hasWheels, gunsMaxPenetration, gunsMaxDamage, gunsMaxPenetrationDamage, gunsTopGunReloadTime });
         }
 
-        private static string csvEscape(string str)
+        private static string CsvEscape(string str)
         {
             if (str.Contains(',') || str.Contains('"'))
                 return "\"" + str.Replace("\"", "\"\"") + "\"";
@@ -379,7 +412,7 @@ namespace WotDataLib
                 return str;
         }
 
-        private static void exportClientData(Tuple<unresolvedBuiltIn, List<unresolvedExtraFileCol>> data, string path)
+        private static void ExportClientData(Tuple<UnresolvedBuiltIn, List<UnresolvedExtraFileCol>> data, string path)
         {
             try { Directory.CreateDirectory(path); }
             catch { }
@@ -431,11 +464,11 @@ namespace WotDataLib
                     {
                         sw.WriteLine("WOT-DATA,2");
                         if (props.Any(p => p.PropertyId.ColumnId != null))
-                            sw.WriteLine("{{ID}}," + props.Select(p => csvEscape(p.PropertyId.ColumnId)).JoinString(","));
+                            sw.WriteLine("{{ID}}," + props.Select(p => CsvEscape(p.PropertyId.ColumnId)).JoinString(","));
                         foreach (var descLang in props.SelectMany(p => p.Descriptions.Keys).Distinct().Order())
-                            sw.WriteLine("{{" + descLang.ToUpper() + "}}," + props.Select(p => p.Descriptions.ContainsKey(descLang) ? csvEscape(p.Descriptions[descLang]) : "").JoinString(","));
+                            sw.WriteLine("{{" + descLang.ToUpper() + "}}," + props.Select(p => p.Descriptions.ContainsKey(descLang) ? CsvEscape(p.Descriptions[descLang]) : "").JoinString(","));
                         if (props.Any(p => p.InheritsFrom != null))
-                            sw.WriteLine("{{Inherit}}," + props.Select(p => csvEscape(p.InheritsFrom)).JoinString(","));
+                            sw.WriteLine("{{Inherit}}," + props.Select(p => CsvEscape(p.InheritsFrom)).JoinString(","));
                         foreach (var tankId in props.SelectMany(p => p.Entries).Select(e => e.TankId).Distinct().Order())
                         {
                             sw.Write(tankId);
@@ -446,7 +479,7 @@ namespace WotDataLib
                                 var entry = prop.Entries.Where(e => e.TankId == tankId).FirstOrDefault();
                                 if (entry != null)
                                 {
-                                    sw.Write(csvEscape(entry.Value));
+                                    sw.Write(CsvEscape(entry.Value));
                                     gameVersionId = gameVersionId ?? entry.GameVersionId;
                                 }
                             }
@@ -460,10 +493,12 @@ namespace WotDataLib
             }
         }
 
-        private static Dictionary<string, List<TankEntry>> loadBuiltInFiles(string dataPath, List<string> warnings, unresolvedBuiltIn fromClient)
+        private static Dictionary<string, List<TankEntry>> LoadBuiltInFiles(string dataPath, List<string> warnings, UnresolvedBuiltIn fromClient)
         {
-            var builtin = new List<unresolvedBuiltIn>();
-            builtin.Add(fromClient);
+            var builtin = new List<UnresolvedBuiltIn>
+            {
+                fromClient
+            };
             var origFilenames = new Dictionary<object, string>();
             foreach (var fi in new DirectoryInfo(dataPath).GetFiles("WotBuiltIn-*.csv"))
             {
@@ -475,8 +510,7 @@ namespace WotDataLib
                     continue;
                 }
 
-                int fileVersion;
-                if (!int.TryParse(parts[1], out fileVersion) || fileVersion < 1)
+                if (!int.TryParse(parts[1], out int fileVersion) || fileVersion < 1)
                 {
                     warnings.Add(WdUtil.Tr.Error.DataDir_Skip_FileVersion.Fmt(fi.Name, parts[1]));
                     continue;
@@ -484,7 +518,7 @@ namespace WotDataLib
 
                 try
                 {
-                    var df = loadBuiltInFile(fileVersion, fi.FullName);
+                    var df = LoadBuiltInFile(fileVersion, fi.FullName);
                     builtin.Add(df);
                     origFilenames[df] = fi.Name;
                 }
@@ -495,12 +529,12 @@ namespace WotDataLib
                 }
             }
 
-            return resolveBuiltIns(warnings, builtin, origFilenames);
+            return ResolveBuiltIns(warnings, builtin, origFilenames);
         }
 
-        private static List<resolvedExtraProperty> loadDataExtraFiles(string dataPath, List<string> warnings, List<unresolvedExtraFileCol> clientData)
+        private static List<ResolvedExtraProperty> LoadDataExtraFiles(string dataPath, List<string> warnings, List<UnresolvedExtraFileCol> clientData)
         {
-            var extra = new List<unresolvedExtraFileCol>();
+            var extra = new List<UnresolvedExtraFileCol>();
             extra.AddRange(clientData);
             var origFilenames = new Dictionary<object, string>();
             foreach (var fi in new DirectoryInfo(dataPath).GetFiles("WotData-*.csv"))
@@ -513,8 +547,7 @@ namespace WotDataLib
                     continue;
                 }
 
-                int fileVersion;
-                if (!int.TryParse(parts[3], out fileVersion) || fileVersion < 1)
+                if (!int.TryParse(parts[3], out int fileVersion) || fileVersion < 1)
                 {
                     warnings.Add(WdUtil.Tr.Error.DataDir_Skip_FileVersion.Fmt(fi.Name, parts[3]));
                     continue;
@@ -536,7 +569,7 @@ namespace WotDataLib
 
                 try
                 {
-                    var df = loadExtraFile(name, author, fileVersion, fi.FullName);
+                    var df = LoadExtraFile(name, author, fileVersion, fi.FullName);
                     foreach (var prop in df)
                     {
                         extra.Add(prop);
@@ -550,15 +583,17 @@ namespace WotDataLib
                 }
             }
 
-            return resolveExtras(warnings, extra, origFilenames);
+            return ResolveExtras(warnings, extra, origFilenames);
         }
 
-        private static HashSet<string> _languages = EnumStrong.GetValues<Language>().Select(l => l.GetIsoLanguageCode()).Concat("en").ToHashSet(StringComparer.OrdinalIgnoreCase);
+        private static readonly HashSet<string> _languages = EnumStrong.GetValues<Language>().Select(l => l.GetIsoLanguageCode()).Concat("en").ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        private static unresolvedBuiltIn loadBuiltInFile(int fileVersion, string filename)
+        private static UnresolvedBuiltIn LoadBuiltInFile(int fileVersion, string filename)
         {
-            var result = new unresolvedBuiltIn();
-            result.FileVersion = fileVersion;
+            var result = new UnresolvedBuiltIn
+            {
+                FileVersion = fileVersion
+            };
 
             var lines = WdUtil.ReadCsvLines(filename).ToArray();
             if (lines.Length == 0)
@@ -609,8 +644,7 @@ namespace WotDataLib
 
                     if (fields.Length > 2 && fields[2] != "")
                     {
-                        int tierNN;
-                        if (!int.TryParse(fields[2], out tierNN))
+                        if (!int.TryParse(fields[2], out int tierNN))
                             throw new WotDataUserError(string.Format(WdUtil.Tr.Error.DataFile_TankTierValue, fields[2]));
                         if (tierNN < 0 || tierNN > 10)
                             throw new WotDataUserError(string.Format(WdUtil.Tr.Error.DataFile_TankTierValue, fields[2]));
@@ -643,8 +677,7 @@ namespace WotDataLib
 
                     if (fields.Length > 5 && fields[5] != "")
                     {
-                        int gameVerId;
-                        if (!fields[5].StartsWith('#') || !int.TryParse(fields[5].Substring(1), out gameVerId))
+                        if (!fields[5].StartsWith('#') || !int.TryParse(fields[5].Substring(1), out int gameVerId))
                             throw new WotDataUserError("The game version doesn't start with a # or does not parse as a number.");
                         gameVersionId = gameVerId;
                     }
@@ -673,7 +706,7 @@ namespace WotDataLib
             return result;
         }
 
-        private static List<unresolvedExtraFileCol> loadExtraFile(string name, string author, int fileVersion, string filename)
+        private static List<UnresolvedExtraFileCol> LoadExtraFile(string name, string author, int fileVersion, string filename)
         {
             var lines = WdUtil.ReadCsvLines(filename).ToArray();
             var header = lines[0].Item2;
@@ -744,8 +777,7 @@ namespace WotDataLib
                         int? version = null;
                         if (fields.Length > 1 + headerID.Length)
                         {
-                            int ver;
-                            if (!fields[1 + headerID.Length].StartsWith("#") || !int.TryParse(fields[1 + headerID.Length].SubstringSafe(1), out ver))
+                            if (!fields[1 + headerID.Length].StartsWith("#") || !int.TryParse(fields[1 + headerID.Length].SubstringSafe(1), out int ver))
                                 throw new WotDataUserError("The game version field must be a number preceded by a #, e.g. #123");
                             version = ver;
                         }
@@ -760,25 +792,27 @@ namespace WotDataLib
                 }
             }
 
-            var properties = new List<unresolvedExtraFileCol>();
+            var properties = new List<UnresolvedExtraFileCol>();
             for (int i = 0; i < headerID.Length; i++)
             {
-                var prop = new unresolvedExtraFileCol();
-                prop.PropertyId = new ExtraPropertyId(fileId: name, columnId: headerID[i] == "" ? null : headerID[i], author: author);
-                prop.Descriptions = headerDesc
+                var prop = new UnresolvedExtraFileCol
+                {
+                    PropertyId = new ExtraPropertyId(fileId: name, columnId: headerID[i] == "" ? null : headerID[i], author: author),
+                    Descriptions = headerDesc
                     .Select(kvp => new KeyValuePair<string, string>(kvp.Key, kvp.Value[i] == "" ? null : kvp.Value[i]))
                     .Where(kvp => kvp.Value != null)
-                    .ToDictionary(StringComparer.OrdinalIgnoreCase);
-                prop.Entries = entries[headerID[i]];
-                prop.FileVersion = fileVersion;
-                prop.InheritsFrom = (headerInherit == null || headerInherit.Length <= i || headerInherit[i] == "") ? null : headerInherit[i];
+                    .ToDictionary(StringComparer.OrdinalIgnoreCase),
+                    Entries = entries[headerID[i]],
+                    FileVersion = fileVersion,
+                    InheritsFrom = (headerInherit == null || headerInherit.Length <= i || headerInherit[i] == "") ? null : headerInherit[i]
+                };
                 properties.Add(prop);
             }
 
             return properties;
         }
 
-        private static Dictionary<string, List<TankEntry>> resolveBuiltIns(List<string> warnings, List<unresolvedBuiltIn> builtins, Dictionary<object, string> origFilenames)
+        private static Dictionary<string, List<TankEntry>> ResolveBuiltIns(List<string> warnings, List<UnresolvedBuiltIn> builtins, Dictionary<object, string> origFilenames)
         {
             // The following rules apply *per tank*.
             // Within a single file, versioned entries take precedence over unversioned entries. The unversioned entries apply only to
@@ -843,19 +877,21 @@ namespace WotDataLib
             return resolved.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
         }
 
-        private static List<resolvedExtraProperty> resolveExtras(List<string> warnings, List<unresolvedExtraFileCol> extraFileCols, Dictionary<object, string> origFilenames)
+        private static List<ResolvedExtraProperty> ResolveExtras(List<string> warnings, List<UnresolvedExtraFileCol> extraFileCols, Dictionary<object, string> origFilenames)
         {
             // Extra properties are first resolved the same way built-in properties are. Then inheritance is applied, using the
             // "inherit from" value specified in the highest file version (i.e. later files may override the inheritance source).
 
-            var properties = new Dictionary<string, unresolvedExtraProperty>(StringComparer.OrdinalIgnoreCase);
+            var properties = new Dictionary<string, UnresolvedExtraProperty>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var extraFileColGroup in extraFileCols.GroupBy(ex => ex.PropertyId))
             {
-                var property = new unresolvedExtraProperty();
-                property.PropertyId = extraFileColGroup.First().PropertyId; // there's got to be at least one, otherwise the group couldn't possibly exist
-                property.Descriptions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                property.Entries = new AutoDictionary<string, HashSet<ExtraEntry>>(_ => new HashSet<ExtraEntry>());
+                var property = new UnresolvedExtraProperty
+                {
+                    PropertyId = extraFileColGroup.First().PropertyId, // there's got to be at least one, otherwise the group couldn't possibly exist
+                    Descriptions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
+                    Entries = new AutoDictionary<string, HashSet<ExtraEntry>>(_ => new HashSet<ExtraEntry>())
+                };
                 properties.Add(property.PropertyId.ToString(), property);
 
                 foreach (var extraFileCol in extraFileColGroup.OrderBy(e => e.FileVersion))
@@ -907,7 +943,7 @@ namespace WotDataLib
             while (true)
             {
                 // Remove properties which inherit from a non-existent property
-                var ignore = new HashSet<unresolvedExtraProperty>();
+                var ignore = new HashSet<UnresolvedExtraProperty>();
                 do
                 {
                     ignore.Clear();
@@ -982,10 +1018,10 @@ namespace WotDataLib
             }
 
             // Store the results in a publicly accessible, read-only format
-            var result = new List<resolvedExtraProperty>();
+            var result = new List<ResolvedExtraProperty>();
             foreach (var p in properties.Values)
             {
-                result.Add(new resolvedExtraProperty(p.PropertyId, p.Descriptions, p.Entries.ToDictionary(
+                result.Add(new ResolvedExtraProperty(p.PropertyId, p.Descriptions, p.Entries.ToDictionary(
                     kvp => kvp.Key,
                     kvp => kvp.Value.OrderBy(e => e.GameVersionId ?? -1).ToList()
                 )));
@@ -993,7 +1029,7 @@ namespace WotDataLib
             return result;
         }
 
-        private static WotContext resolve(GameInstallation installation, GameVersionConfig versionConfig, Dictionary<string, List<TankEntry>> builtins, List<resolvedExtraProperty> extras, List<string> warnings, string defaultAuthor)
+        private static WotContext Resolve(GameInstallation installation, GameVersionConfig versionConfig, Dictionary<string, List<TankEntry>> builtins, List<ResolvedExtraProperty> extras, List<string> warnings, string defaultAuthor)
         {
             var gameVerId = installation.GameVersionId.Value; // cannot be null; the caller checks this
             var context = new WotContext(installation, versionConfig, warnings, defaultAuthor);
@@ -1065,7 +1101,7 @@ namespace WotDataLib
                 Category = category;
                 GameVersionId = gameVersionId;
                 Delete = delete;
-                ImageName = imageName == null ? tankId : imageName;
+                ImageName = imageName ?? tankId;
             }
 
             public override string ToString()
@@ -1094,14 +1130,14 @@ namespace WotDataLib
             }
         }
 
-        private sealed class unresolvedBuiltIn
+        private sealed class UnresolvedBuiltIn
         {
             public int FileVersion;
             public List<TankEntry> Entries;
             public override string ToString() { return "WotData-BuiltIn-{0}".Fmt(FileVersion); }
         }
 
-        private sealed class unresolvedExtraFileCol
+        private sealed class UnresolvedExtraFileCol
         {
             public ExtraPropertyId PropertyId;
             /// <summary>Optional; empty if it wasn't specified.</summary>
@@ -1120,7 +1156,7 @@ namespace WotDataLib
             }
         }
 
-        private sealed class unresolvedExtraProperty
+        private sealed class UnresolvedExtraProperty
         {
             public ExtraPropertyId PropertyId;
             /// <summary>Optional; empty if it wasn't specified.</summary>
@@ -1135,12 +1171,12 @@ namespace WotDataLib
                 return PropertyId.ToString() + (InheritsFrom == null ? "" : " (inh {0})".Fmt(InheritsFrom));
             }
 
-            public unresolvedExtraProperty ImmediateParent;
-            public HashSet<unresolvedExtraProperty> TransitiveChildren = new HashSet<unresolvedExtraProperty>();
+            public UnresolvedExtraProperty ImmediateParent;
+            public HashSet<UnresolvedExtraProperty> TransitiveChildren = new HashSet<UnresolvedExtraProperty>();
             public int Depth;
         }
 
-        private sealed class resolvedExtraProperty
+        private sealed class ResolvedExtraProperty
         {
             public ExtraPropertyId PropertyId { get; private set; }
             /// <summary>Optional; empty if it wasn't specified.</summary>
@@ -1148,7 +1184,7 @@ namespace WotDataLib
 
             public Dictionary<string, List<ExtraEntry>> Entries { get; private set; }
 
-            public resolvedExtraProperty(ExtraPropertyId propertyId, Dictionary<string, string> descriptions, Dictionary<string, List<ExtraEntry>> entries)
+            public ResolvedExtraProperty(ExtraPropertyId propertyId, Dictionary<string, string> descriptions, Dictionary<string, List<ExtraEntry>> entries)
             {
                 PropertyId = propertyId;
                 Descriptions = descriptions;
