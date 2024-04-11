@@ -413,7 +413,7 @@ namespace WotDataLib
             TrackArmorThickness = 0;
             if (chassis.ContainsKey("armor"))
             {
-                string[] ChassisArmors = { "leftTrack", "rightTrack", "armor_9", "armor_15" };
+                string[] ChassisArmors = { "wheel", "leftTrack", "rightTrack", "armor_9", "armor_15", "armor_31", "armor_32" };
                 IEnumerable<string> ChassisArmor = chassis["armor"].Keys.Intersect<string>(ChassisArmors);
                 if (ChassisArmor.Count() > 0)
                 {

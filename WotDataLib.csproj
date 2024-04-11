@@ -31,11 +31,11 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="ICSharpCode.SharpZipLib, Version=0.86.5.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\ThirdParty\ICSharpCode.SharpZipLib.Patched.0.86.5.1\lib\net20\ICSharpCode.SharpZipLib.dll</HintPath>
+      <HintPath>ThirdParty\ICSharpCode.SharpZipLib.Patched.0.86.5.1\lib\net20\ICSharpCode.SharpZipLib.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="RT.Util, Version=1.0.1542.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\RT.Util.1.0.1542\lib\net40-client\RT.Util.dll</HintPath>
+      <HintPath>packages\RT.Util.1.0.1542\lib\net40-client\RT.Util.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="System" />
